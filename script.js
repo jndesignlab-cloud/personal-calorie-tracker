@@ -1,9 +1,13 @@
 const API_URL = "https://script.google.com/macros/s/AKfycbwx4Xy73BwQcdEAeHqdKMdiMG5ZhtCJOLDrx_VR7O8LWVHXw1LICkLc_6ZuRcy8ukYT1g/exec";
 const DAILY_LIMIT = 1650;
 
+let foods = [];
+let mealItems = [];
+
 const dateInput = document.getElementById("dateInput");
 const mealInput = document.getElementById("mealInput");
-const foodInput = document.getElementById("foodInput");
+const foodSelect = document.getElementById("foodSelect");
+const quantityInput = document.getElementById("quantityInput");
 const calorieInput = document.getElementById("calorieInput");
 const notesInput = document.getElementById("notesInput");
 
@@ -14,8 +18,9 @@ const statusText = document.getElementById("statusText");
 const progressBar = document.getElementById("progressBar");
 
 const entriesList = document.getElementById("entriesList");
-const foodList = document.getElementById("foodList");
+const mealItemsContainer = document.getElementById("mealItems");
 
+const foodModal = document.getElementById("foodModal");
 const newFoodInput = document.getElementById("newFoodInput");
 const newCaloriesInput = document.getElementById("newCaloriesInput");
 
@@ -30,67 +35,118 @@ async function callAPI(payload) {
   return response.json();
 }
 
-async function estimateCalories() {
-  const food = foodInput.value.trim();
+async function loadFoods() {
+  foodSelect.innerHTML = "<option>Loading foods...</option>";
 
-  if (!food) {
-    alert("Please enter food intake.");
+  const data = await callAPI({ action: "getFoods" });
+  foods = data.foods || [];
+
+  foodSelect.innerHTML = "";
+
+  if (!foods.length) {
+    foodSelect.innerHTML = "<option>No foods found</option>";
     return;
   }
 
-  notesInput.value = "Checking FoodDatabase...";
-
-  const data = await callAPI({
-    action: "estimateOnly",
-    food
+  foods.forEach(item => {
+    const option = document.createElement("option");
+    option.value = item.food;
+    option.textContent = `${item.food} - ${item.calories} kcal`;
+    option.dataset.calories = item.calories;
+    foodSelect.appendChild(option);
   });
+}
 
-  if (data.missing && data.missing.length > 0) {
-    for (const missingFood of data.missing) {
-      const cal = prompt(`"${missingFood}" is not in your FoodDatabase. Enter calories per serving:`);
-
-      if (cal && Number(cal) > 0) {
-        await callAPI({
-          action: "addFood",
-          food: missingFood,
-          calories: Number(cal)
-        });
-      }
-    }
-
-    return estimateCalories();
+function addMealItem() {
+  if (!foodSelect.value || foodSelect.value === "No foods found") {
+    alert("Please add food to your database first.");
+    return;
   }
 
-  calorieInput.value = data.total;
-  notesInput.value = data.breakdown.join("; ");
+  const selectedOption = foodSelect.selectedOptions[0];
+  const food = foodSelect.value;
+  const caloriesPerServing = Number(selectedOption.dataset.calories);
+  const quantity = Number(quantityInput.value);
+
+  if (!quantity || quantity <= 0) {
+    alert("Please enter a valid quantity.");
+    return;
+  }
+
+  const totalCalories = caloriesPerServing * quantity;
+
+  mealItems.push({
+    food,
+    quantity,
+    caloriesPerServing,
+    totalCalories
+  });
+
+  quantityInput.value = 1;
+  renderMealItems();
+}
+
+function renderMealItems() {
+  mealItemsContainer.innerHTML = "";
+
+  let total = 0;
+  let notes = [];
+
+  mealItems.forEach((item, index) => {
+    total += item.totalCalories;
+
+    notes.push(`${item.food} x ${item.quantity} = ${item.totalCalories} kcal`);
+
+    const div = document.createElement("div");
+    div.className = "meal-item";
+
+    div.innerHTML = `
+      <div>
+        <strong>${item.food}</strong>
+        <p>${item.quantity} x ${item.caloriesPerServing} kcal = ${item.totalCalories} kcal</p>
+      </div>
+      <button class="remove-item-btn" onclick="removeMealItem(${index})">Remove</button>
+    `;
+
+    mealItemsContainer.appendChild(div);
+  });
+
+  calorieInput.value = total;
+  notesInput.value = notes.join("; ");
+}
+
+function removeMealItem(index) {
+  mealItems.splice(index, 1);
+  renderMealItems();
 }
 
 async function saveEntry() {
-  const food = foodInput.value.trim();
-  const calories = Number(calorieInput.value);
-
-  if (!food) {
-    alert("Please enter food intake.");
+  if (!mealItems.length) {
+    alert("Please add at least one food item.");
     return;
   }
 
-  if (!calories || calories <= 0) {
-    alert("Please check the database or enter calories manually.");
-    return;
-  }
+  const totalCalories = Number(calorieInput.value);
+
+  const foodText = mealItems
+    .map(item => `${item.food} x ${item.quantity}`)
+    .join(", ");
+
+  const totalQuantity = mealItems
+    .reduce((sum, item) => sum + Number(item.quantity), 0);
 
   await callAPI({
     action: "saveLog",
     date: dateInput.value,
     meal: mealInput.value,
-    food,
-    calories,
+    food: foodText,
+    quantity: totalQuantity,
+    calories: totalCalories,
     notes: notesInput.value
   });
 
-  foodInput.value = "";
-  calorieInput.value = "";
-  notesInput.value = "";
+  mealItems = [];
+  renderMealItems();
 
   await loadLogs();
 }
@@ -113,29 +169,30 @@ function renderEntries(logs) {
     entriesList.innerHTML = "<p class='note'>No entries for this date yet.</p>";
   }
 
-  let total = 0;
+  let consumed = 0;
 
   logs.forEach(log => {
-    total += Number(log[4] || 0);
+    consumed += Number(log[5] || 0);
 
     const div = document.createElement("div");
     div.className = "entry";
 
     div.innerHTML = `
-      <strong>${log[2]} - ${log[4]} kcal</strong>
+      <strong>${log[2]} - ${log[5]} kcal</strong>
       <p>${log[3]}</p>
-      <small>${log[7] || "No notes"}</small>
+      <small>${log[8] || "No notes"}</small>
     `;
 
     entriesList.appendChild(div);
   });
 
-  updateSummary(total);
+  updateSummary(consumed);
 }
 
 function updateSummary(consumed) {
-  const remaining = DAILY_LIMIT - consumed;
-  const excess = remaining < 0 ? Math.abs(remaining) : 0;
+  const remainingRaw = DAILY_LIMIT - consumed;
+  const remaining = remainingRaw > 0 ? remainingRaw : 0;
+  const excess = remainingRaw < 0 ? Math.abs(remainingRaw) : 0;
   const progress = Math.min((consumed / DAILY_LIMIT) * 100, 100);
 
   consumedCalories.textContent = consumed;
@@ -146,12 +203,12 @@ function updateSummary(consumed) {
     remainingLabel.textContent = "Remaining";
     statusText.textContent = "You have not logged anything yet.";
     progressBar.style.background = "#22c55e";
-  } else if (remaining > 0) {
+  } else if (remainingRaw > 0) {
     remainingCalories.textContent = remaining;
     remainingLabel.textContent = "Remaining";
     statusText.textContent = `You consumed ${consumed} kcal. Remaining: ${remaining} kcal.`;
     progressBar.style.background = "#22c55e";
-  } else if (remaining === 0) {
+  } else if (remainingRaw === 0) {
     remainingCalories.textContent = "0";
     remainingLabel.textContent = "Remaining";
     statusText.textContent = "You reached your daily limit exactly.";
@@ -164,12 +221,20 @@ function updateSummary(consumed) {
   }
 }
 
+function openFoodModal() {
+  foodModal.classList.remove("hidden");
+}
+
+function closeFoodModal() {
+  foodModal.classList.add("hidden");
+}
+
 async function addFood() {
-  const food = newFoodInput.value.trim().toLowerCase();
+  const food = newFoodInput.value.trim();
   const calories = Number(newCaloriesInput.value);
 
   if (!food || !calories) {
-    alert("Please enter food and calories.");
+    alert("Please enter food name and calories.");
     return;
   }
 
@@ -182,37 +247,11 @@ async function addFood() {
   newFoodInput.value = "";
   newCaloriesInput.value = "";
 
+  closeFoodModal();
   await loadFoods();
-}
-
-async function loadFoods() {
-  foodList.innerHTML = "<p class='note'>Loading food database...</p>";
-
-  const data = await callAPI({
-    action: "getFoods"
-  });
-
-  foodList.innerHTML = "";
-
-  if (!data.foods || data.foods.length === 0) {
-    foodList.innerHTML = "<p class='note'>No foods in database yet.</p>";
-    return;
-  }
-
-  data.foods.forEach(item => {
-    const div = document.createElement("div");
-    div.className = "food-item";
-
-    div.innerHTML = `
-      <strong>${item.food}</strong>
-      <p>${item.calories} kcal / serving</p>
-    `;
-
-    foodList.appendChild(div);
-  });
 }
 
 dateInput.addEventListener("change", loadLogs);
 
-loadLogs();
 loadFoods();
+loadLogs();
