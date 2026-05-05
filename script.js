@@ -1,4 +1,4 @@
-const API_URL = "PASTE_YOUR_APPS_SCRIPT_WEB_APP_URL_HERE";
+const API_URL = "https://script.google.com/macros/s/AKfycbxH4Xg5tZH9QOs4IddquHfUpl0YBvt4elKejLkO-I0cFfPjG2Lm-_OYJcKmpxx-EI3iZw/exec";
 const DAILY_LIMIT = 1650;
 
 let foods = [];
