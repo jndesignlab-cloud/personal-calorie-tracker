@@ -1,28 +1,19 @@
-const GOOGLE_SCRIPT_URL = "PASTE_YOUR_WEB_APP_URL_HERE";
+const GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwx4Xy73BwQcdEAeHqdKMdiMG5ZhtCJOLDrx_VR7O8LWVHXw1LICkLc_6ZuRcy8ukYT1g/exec";
 
 const foodDatabase = [
-  { keyword: "rice", calories: 200 },
-  { keyword: "1 cup rice", calories: 200 },
-  { keyword: "fried chicken", calories: 350 },
-  { keyword: "chicken", calories: 250 },
-  { keyword: "egg", calories: 70 },
-  { keyword: "boiled egg", calories: 70 },
-  { keyword: "hotdog", calories: 150 },
-  { keyword: "bread", calories: 120 },
-  { keyword: "coffee", calories: 80 },
-  { keyword: "iced coffee", calories: 180 },
-  { keyword: "milk tea", calories: 350 },
-  { keyword: "banana", calories: 100 },
-  { keyword: "apple", calories: 95 },
-  { keyword: "pork", calories: 300 },
-  { keyword: "beef", calories: 300 },
-  { keyword: "fish", calories: 220 },
-  { keyword: "vegetables", calories: 80 },
-  { keyword: "pasta", calories: 350 },
-  { keyword: "burger", calories: 500 },
-  { keyword: "fries", calories: 320 },
-  { keyword: "pizza", calories: 285 },
-  { keyword: "soft drink", calories: 150 }
+  { name: "Rice", keywords: ["rice", "white rice", "kanin"], calories: 200, unit: "serving" },
+  { name: "Egg", keywords: ["egg", "eggs", "boiled egg", "fried egg"], calories: 70, unit: "piece" },
+  { name: "Fried Chicken", keywords: ["fried chicken", "chickenjoy"], calories: 350, unit: "piece" },
+  { name: "Chicken", keywords: ["chicken"], calories: 250, unit: "serving" },
+  { name: "Hotdog", keywords: ["hotdog", "hot dog"], calories: 150, unit: "piece" },
+  { name: "Iced Coffee", keywords: ["iced coffee"], calories: 180, unit: "cup" },
+  { name: "Coffee", keywords: ["coffee"], calories: 80, unit: "cup" },
+  { name: "Milk Tea", keywords: ["milk tea", "milktea"], calories: 350, unit: "cup" },
+  { name: "Pork Adobo", keywords: ["pork adobo", "adobong baboy"], calories: 350, unit: "serving" },
+  { name: "Chicken Adobo", keywords: ["chicken adobo", "adobong manok"], calories: 300, unit: "serving" },
+  { name: "Pancit", keywords: ["pancit", "pansit"], calories: 350, unit: "serving" },
+  { name: "Lumpia", keywords: ["lumpia"], calories: 90, unit: "piece" },
+  { name: "Siomai", keywords: ["siomai"], calories: 70, unit: "piece" }
 ];
 
 let entries = JSON.parse(localStorage.getItem("calorieEntries")) || [];
@@ -42,17 +33,93 @@ const progressBar = document.getElementById("progressBar");
 
 dateInput.valueAsDate = new Date();
 
-function estimateCalories() {
-  const foodText = foodInput.value.toLowerCase();
-  let total = 0;
+async function estimateCalories() {
+  const foodText = foodInput.value.trim();
 
-  foodDatabase.forEach(item => {
-    if (foodText.includes(item.keyword)) {
-      total += item.calories;
+  if (!foodText) {
+    alert("Please enter your food intake first.");
+    return;
+  }
+
+  calorieInput.value = "";
+  notesInput.value = "Estimating with API Ninjas...";
+
+  try {
+    const response = await fetch(GOOGLE_SCRIPT_URL, {
+      method: "POST",
+      body: JSON.stringify({
+        action: "estimate",
+        food: foodText
+      })
+    });
+
+    const data = await response.json();
+
+    if (data.status === "success") {
+      calorieInput.value = data.totalCalories;
+
+      const breakdownText = data.breakdown.map(item => {
+        return `${item.name}: ${item.calories} kcal`;
+      }).join("; ");
+
+      notesInput.value = `API Estimate: ${breakdownText}`;
+      return;
+    }
+
+    fallbackEstimate(foodText);
+
+  } catch (error) {
+    fallbackEstimate(foodText);
+  }
+}
+
+function fallbackEstimate(foodText) {
+  const items = foodText
+    .toLowerCase()
+    .replace(/\band\b/g, ",")
+    .split(",")
+    .map(item => item.trim())
+    .filter(Boolean);
+
+  let total = 0;
+  let breakdown = [];
+
+  items.forEach(itemText => {
+    let matchedFood = null;
+
+    foodDatabase.forEach(food => {
+      food.keywords.forEach(keyword => {
+        if (itemText.includes(keyword)) {
+          matchedFood = food;
+        }
+      });
+    });
+
+    if (matchedFood) {
+      const quantity = getQuantity(itemText);
+      const itemCalories = matchedFood.calories * quantity;
+      total += itemCalories;
+      breakdown.push(`${quantity} ${matchedFood.unit} ${matchedFood.name} = ${itemCalories} kcal`);
     }
   });
 
   calorieInput.value = total || 0;
+
+  notesInput.value = breakdown.length > 0
+    ? `Fallback Estimate: ${breakdown.join("; ")}`
+    : "No API or local match found. Please enter calories manually.";
+}
+
+function getQuantity(text) {
+  const numberMatch = text.match(/\d+(\.\d+)?/);
+
+  if (numberMatch) return parseFloat(numberMatch[0]);
+  if (text.includes("half")) return 0.5;
+  if (text.includes("one")) return 1;
+  if (text.includes("two")) return 2;
+  if (text.includes("three")) return 3;
+
+  return 1;
 }
 
 function saveEntry() {
@@ -78,6 +145,7 @@ function saveEntry() {
   const excess = remaining < 0 ? Math.abs(remaining) : 0;
 
   const entry = {
+    action: "save",
     date: selectedDate,
     meal: mealInput.value,
     food: foodInput.value.trim(),
@@ -134,7 +202,6 @@ function updateSummary(todayEntries) {
   const percentage = Math.min((consumed / goal) * 100, 100);
 
   consumedCalories.textContent = consumed;
-
   progressBar.style.width = `${percentage}%`;
 
   if (consumed === 0) {
@@ -164,16 +231,7 @@ function sendToGoogleSheets(entry) {
   fetch(GOOGLE_SCRIPT_URL, {
     method: "POST",
     mode: "no-cors",
-    headers: {
-      "Content-Type": "application/json"
-    },
     body: JSON.stringify(entry)
-  })
-  .then(() => {
-    console.log("Saved to Google Sheets");
-  })
-  .catch(error => {
-    console.error("Google Sheets error:", error);
   });
 }
 
