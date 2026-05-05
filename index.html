@@ -3,43 +3,46 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Personal Calorie Tracker</title>
+  <title>DesignLab Calorie Tracker</title>
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
 
   <main class="app">
-    <section class="hero">
-      <div class="badge">DesignLab Personal System</div>
+    <header class="hero">
+      <span class="badge">DesignLab Personal System</span>
       <h1>Calorie Tracker</h1>
-      <p>Track your meals, estimate calories, and monitor your 1,650 kcal daily intake.</p>
+      <p>Cloud-synced meal logging with a Google Sheets food database.</p>
+    </header>
+
+    <section class="dashboard">
+      <div class="metric-card">
+        <span>Daily Limit</span>
+        <h2>1650</h2>
+        <p>kcal target</p>
+      </div>
+
+      <div class="metric-card">
+        <span>Consumed</span>
+        <h2 id="consumedCalories">0</h2>
+        <p>kcal logged</p>
+      </div>
+
+      <div class="metric-card accent">
+        <span id="remainingLabel">Remaining</span>
+        <h2 id="remainingCalories">1650</h2>
+        <p>daily status</p>
+      </div>
     </section>
 
-    <section class="card summary-card">
-      <div class="top-controls">
+    <section class="card">
+      <div class="top-row">
         <div>
           <label>Date</label>
           <input type="date" id="dateInput" />
         </div>
 
-        <div>
-          <label>Daily Calorie Limit</label>
-          <input type="number" id="goalInput" value="1650" />
-        </div>
-      </div>
-
-      <div class="status-grid">
-        <div class="status-box dark-box">
-          <span>Consumed</span>
-          <h2 id="consumedCalories">0</h2>
-          <p>kcal logged today</p>
-        </div>
-
-        <div class="status-box accent-box">
-          <span id="remainingLabel">Remaining</span>
-          <h2 id="remainingCalories">1650</h2>
-          <p>daily calorie status</p>
-        </div>
+        <button class="secondary-btn" onclick="loadLogs()">Sync Entries</button>
       </div>
 
       <div class="progress-wrap">
@@ -49,38 +52,56 @@
       <p id="statusText">You have not logged anything yet.</p>
     </section>
 
-    <section class="grid-layout">
-      <section class="card form-card">
-        <h2>Add Food Intake</h2>
-        <p class="section-note">Type your meal naturally, then estimate using API Ninjas or fallback logic.</p>
+    <section class="main-grid">
+      <section class="card">
+        <h2>Add Meal</h2>
+        <p class="note">Example: 2 egg, 1 rice, fried chicken</p>
 
         <label>Meal Type</label>
         <select id="mealInput">
-          <option value="Breakfast">Breakfast</option>
-          <option value="Lunch">Lunch</option>
-          <option value="Dinner">Dinner</option>
-          <option value="Snack">Snack</option>
+          <option>Breakfast</option>
+          <option>Lunch</option>
+          <option>Dinner</option>
+          <option>Snack</option>
         </select>
 
         <label>Food Intake</label>
-        <textarea id="foodInput" placeholder="Example: 2 eggs, 1 cup rice, fried chicken, iced coffee"></textarea>
+        <textarea id="foodInput" placeholder="Type your food intake here..."></textarea>
 
-        <button onclick="estimateCalories()">Estimate Calories</button>
+        <button onclick="estimateCalories()">Check Database</button>
 
         <label>Estimated Calories</label>
         <input type="number" id="calorieInput" placeholder="Calories will appear here" />
 
         <label>Notes</label>
-        <input type="text" id="notesInput" placeholder="Optional notes or API breakdown" />
+        <input type="text" id="notesInput" placeholder="Breakdown or notes" />
 
-        <button class="save-btn" onclick="saveEntry()">Save Entry</button>
+        <button class="save-btn" onclick="saveEntry()">Save Meal</button>
       </section>
 
-      <section class="card entries-card">
+      <section class="card">
         <h2>Entries</h2>
-        <p class="section-note">Records for the selected date.</p>
+        <p class="note">Auto-loaded from Google Sheets.</p>
         <div id="entriesList"></div>
       </section>
+    </section>
+
+    <section class="card">
+      <h2>Food Database Manager</h2>
+      <p class="note">Add food manually to your Google Sheets database.</p>
+
+      <div class="food-manager">
+        <input type="text" id="newFoodInput" placeholder="Food name e.g. rice" />
+        <input type="number" id="newCaloriesInput" placeholder="Calories per serving" />
+        <button onclick="addFood()">Add Food</button>
+      </div>
+
+      <div class="database-header">
+        <h3>Food Database</h3>
+        <button class="secondary-btn" onclick="loadFoods()">Refresh Foods</button>
+      </div>
+
+      <div id="foodList" class="food-list"></div>
     </section>
   </main>
 
