@@ -1,4 +1,4 @@
-const API_URL = "https://script.google.com/macros/s/AKfycby19XtgFxPoibOQ_KxovO8xabHQe7sx4qIwnFKKt9io13OfAi7arequV0auh75ArCH5gg/exec";
+const API_URL = "PASTE_YOUR_APPS_SCRIPT_WEB_APP_URL_HERE";
 const DAILY_LIMIT = 1650;
 
 let foods = [];
@@ -27,18 +27,38 @@ const newCaloriesInput = document.getElementById("newCaloriesInput");
 dateInput.valueAsDate = new Date();
 
 async function callAPI(payload) {
-  const response = await fetch(API_URL, {
-    method: "POST",
-    body: JSON.stringify(payload)
-  });
+  try {
+    const response = await fetch(API_URL, {
+      method: "POST",
+      body: JSON.stringify(payload)
+    });
 
-  return response.json();
+    return await response.json();
+
+  } catch (error) {
+    console.error("API Error:", error);
+
+    return {
+      status: "error",
+      message: "Unable to connect to Apps Script."
+    };
+  }
 }
 
 async function loadFoods() {
   foodSelect.innerHTML = "<option>Loading foods...</option>";
 
-  const data = await callAPI({ action: "getFoods" });
+  const data = await callAPI({
+    action: "getFoods"
+  });
+
+  console.log("Food Database Response:", data);
+
+  if (data.status !== "success") {
+    foodSelect.innerHTML = `<option>${data.message || "Error loading foods"}</option>`;
+    return;
+  }
+
   foods = data.foods || [];
 
   foodSelect.innerHTML = "";
@@ -76,10 +96,10 @@ function addMealItem() {
   const totalCalories = caloriesPerServing * quantity;
 
   mealItems.push({
-    food,
-    quantity,
-    caloriesPerServing,
-    totalCalories
+    food: food,
+    quantity: quantity,
+    caloriesPerServing: caloriesPerServing,
+    totalCalories: totalCalories
   });
 
   quantityInput.value = 1;
@@ -135,7 +155,7 @@ async function saveEntry() {
   const totalQuantity = mealItems
     .reduce((sum, item) => sum + Number(item.quantity), 0);
 
-  await callAPI({
+  const data = await callAPI({
     action: "saveLog",
     date: dateInput.value,
     meal: mealInput.value,
@@ -144,6 +164,11 @@ async function saveEntry() {
     calories: totalCalories,
     notes: notesInput.value
   });
+
+  if (data.status !== "success") {
+    alert(data.message || "Unable to save meal.");
+    return;
+  }
 
   mealItems = [];
   renderMealItems();
@@ -158,6 +183,11 @@ async function loadLogs() {
     action: "getLogs",
     date: dateInput.value
   });
+
+  if (data.status !== "success") {
+    entriesList.innerHTML = `<p class='note'>${data.message || "Unable to load entries."}</p>`;
+    return;
+  }
 
   renderEntries(data.logs || []);
 }
@@ -238,11 +268,16 @@ async function addFood() {
     return;
   }
 
-  await callAPI({
+  const data = await callAPI({
     action: "addFood",
-    food,
-    calories
+    food: food,
+    calories: calories
   });
+
+  if (data.status !== "success") {
+    alert(data.message || "Unable to add food.");
+    return;
+  }
 
   newFoodInput.value = "";
   newCaloriesInput.value = "";
