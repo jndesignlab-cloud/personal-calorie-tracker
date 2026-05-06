@@ -1,4 +1,4 @@
-const API_URL = "https://script.google.com/macros/s/AKfycbxH4Xg5tZH9QOs4IddquHfUpl0YBvt4elKejLkO-I0cFfPjG2Lm-_OYJcKmpxx-EI3iZw/exec";
+const API_URL = "PASTE_YOUR_APPS_SCRIPT_WEB_APP_URL_HERE";
 const DAILY_LIMIT = 1650;
 
 let foods = [];
@@ -27,32 +27,18 @@ const newCaloriesInput = document.getElementById("newCaloriesInput");
 dateInput.valueAsDate = new Date();
 
 async function callAPI(payload) {
-  try {
-    const response = await fetch(API_URL, {
-      method: "POST",
-      body: JSON.stringify(payload)
-    });
+  const response = await fetch(API_URL, {
+    method: "POST",
+    body: JSON.stringify(payload)
+  });
 
-    return await response.json();
-
-  } catch (error) {
-    console.error("API Error:", error);
-
-    return {
-      status: "error",
-      message: "Unable to connect to Apps Script."
-    };
-  }
+  return await response.json();
 }
 
 async function loadFoods() {
   foodSelect.innerHTML = "<option>Loading foods...</option>";
 
-  const data = await callAPI({
-    action: "getFoods"
-  });
-
-  console.log("Food Database Response:", data);
+  const data = await callAPI({ action: "getFoods" });
 
   if (data.status !== "success") {
     foodSelect.innerHTML = `<option>${data.message || "Error loading foods"}</option>`;
@@ -60,7 +46,6 @@ async function loadFoods() {
   }
 
   foods = data.foods || [];
-
   foodSelect.innerHTML = "";
 
   if (!foods.length) {
@@ -78,12 +63,13 @@ async function loadFoods() {
 }
 
 function addMealItem() {
-  if (!foodSelect.value || foodSelect.value === "No foods found") {
+  const selectedOption = foodSelect.selectedOptions[0];
+
+  if (!selectedOption || foodSelect.value === "No foods found") {
     alert("Please add food to your database first.");
     return;
   }
 
-  const selectedOption = foodSelect.selectedOptions[0];
   const food = foodSelect.value;
   const caloriesPerServing = Number(selectedOption.dataset.calories);
   const quantity = Number(quantityInput.value);
@@ -96,10 +82,10 @@ function addMealItem() {
   const totalCalories = caloriesPerServing * quantity;
 
   mealItems.push({
-    food: food,
-    quantity: quantity,
-    caloriesPerServing: caloriesPerServing,
-    totalCalories: totalCalories
+    food,
+    quantity,
+    caloriesPerServing,
+    totalCalories
   });
 
   quantityInput.value = 1;
@@ -114,7 +100,6 @@ function renderMealItems() {
 
   mealItems.forEach((item, index) => {
     total += item.totalCalories;
-
     notes.push(`${item.food} x ${item.quantity} = ${item.totalCalories} kcal`);
 
     const div = document.createElement("div");
@@ -197,20 +182,22 @@ function renderEntries(logs) {
 
   if (!logs.length) {
     entriesList.innerHTML = "<p class='note'>No entries for this date yet.</p>";
+    updateSummary(0);
+    return;
   }
 
   let consumed = 0;
 
   logs.forEach(log => {
-    consumed += Number(log[5] || 0);
+    consumed += Number(log.calories || 0);
 
     const div = document.createElement("div");
     div.className = "entry";
 
     div.innerHTML = `
-      <strong>${log[2]} - ${log[5]} kcal</strong>
-      <p>${log[3]}</p>
-      <small>${log[8] || "No notes"}</small>
+      <strong>${log.meal} - ${log.calories} kcal</strong>
+      <p>${log.food}</p>
+      <small>${log.notes || "No notes"}</small>
     `;
 
     entriesList.appendChild(div);
@@ -270,8 +257,8 @@ async function addFood() {
 
   const data = await callAPI({
     action: "addFood",
-    food: food,
-    calories: calories
+    food,
+    calories
   });
 
   if (data.status !== "success") {
