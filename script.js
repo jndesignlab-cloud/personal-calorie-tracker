@@ -3,6 +3,7 @@ const DAILY_LIMIT = 1650;
 
 let foods = [];
 let mealItems = [];
+let savedConsumed = 0;
 
 const dateInput = document.getElementById("dateInput");
 const mealInput = document.getElementById("mealInput");
@@ -27,12 +28,23 @@ const newCaloriesInput = document.getElementById("newCaloriesInput");
 dateInput.valueAsDate = new Date();
 
 async function callAPI(payload) {
-  const response = await fetch(API_URL, {
-    method: "POST",
-    body: JSON.stringify(payload)
-  });
+  try {
+    const response = await fetch(API_URL, {
+      method: "POST",
+      body: JSON.stringify(payload)
+    });
 
-  return await response.json();
+    const data = await response.json();
+    console.log("API RESPONSE:", payload.action, data);
+    return data;
+
+  } catch (error) {
+    console.error("API ERROR:", error);
+    return {
+      status: "error",
+      message: "Unable to connect to Apps Script."
+    };
+  }
 }
 
 async function loadFoods() {
@@ -95,11 +107,11 @@ function addMealItem() {
 function renderMealItems() {
   mealItemsContainer.innerHTML = "";
 
-  let total = 0;
+  let mealTotal = 0;
   let notes = [];
 
   mealItems.forEach((item, index) => {
-    total += item.totalCalories;
+    mealTotal += item.totalCalories;
     notes.push(`${item.food} x ${item.quantity} = ${item.totalCalories} kcal`);
 
     const div = document.createElement("div");
@@ -116,8 +128,10 @@ function renderMealItems() {
     mealItemsContainer.appendChild(div);
   });
 
-  calorieInput.value = total;
+  calorieInput.value = mealTotal;
   notesInput.value = notes.join("; ");
+
+  updateSummary(savedConsumed + mealTotal);
 }
 
 function removeMealItem(index) {
@@ -171,6 +185,8 @@ async function loadLogs() {
 
   if (data.status !== "success") {
     entriesList.innerHTML = `<p class='note'>${data.message || "Unable to load entries."}</p>`;
+    savedConsumed = 0;
+    updateSummary(0);
     return;
   }
 
@@ -179,6 +195,7 @@ async function loadLogs() {
 
 function renderEntries(logs) {
   entriesList.innerHTML = "";
+  savedConsumed = 0;
 
   if (!logs.length) {
     entriesList.innerHTML = "<p class='note'>No entries for this date yet.</p>";
@@ -186,10 +203,8 @@ function renderEntries(logs) {
     return;
   }
 
-  let consumed = 0;
-
   logs.forEach(log => {
-    consumed += Number(log.calories || 0);
+    savedConsumed += Number(log.calories || 0);
 
     const div = document.createElement("div");
     div.className = "entry";
@@ -203,7 +218,7 @@ function renderEntries(logs) {
     entriesList.appendChild(div);
   });
 
-  updateSummary(consumed);
+  updateSummary(savedConsumed);
 }
 
 function updateSummary(consumed) {
@@ -273,7 +288,11 @@ async function addFood() {
   await loadFoods();
 }
 
-dateInput.addEventListener("change", loadLogs);
+dateInput.addEventListener("change", async () => {
+  mealItems = [];
+  renderMealItems();
+  await loadLogs();
+});
 
 loadFoods();
 loadLogs();
